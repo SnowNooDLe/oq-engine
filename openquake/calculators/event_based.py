@@ -114,6 +114,7 @@ class EventBasedCalculator(base.HazardCalculator):
     accept_precalc = ['event_based', 'ebrisk', 'event_based_risk']
 
     def init(self):
+        oq = self.oqparam
         if hasattr(self, 'csm'):
             self.check_floating_spinning()
         if hasattr(self.oqparam, 'maximum_distance'):
@@ -123,6 +124,8 @@ class EventBasedCalculator(base.HazardCalculator):
         if not self.datastore.parent:
             self.datastore.create_dset('ruptures', rupture_dt)
             self.datastore.create_dset('rupgeoms', hdf5.vfloat32)
+        if oq.ground_motion_fields:
+            self.log_gmf = numpy.zeros((2, self.N, len(oq.min_iml)), F32)
 
     def acc0(self):
         """
@@ -205,6 +208,13 @@ class EventBasedCalculator(base.HazardCalculator):
             imp.import_rups_events(
                 self.datastore.getitem('ruptures')[()], get_rupture_getters)
 
+    def update_log_gmf(self, gmf_df, M):
+        for sid, df in gmf_df.groupby('sid'):
+            for m in range(M):
+                log_gmf = numpy.log(df[f'gmv_{m}'].to_numpy())
+                self.log_gmf[0, sid, m] += log_gmf.sum()
+                self.log_gmf[1, sid, m] += (log_gmf ** 2).sum()
+
     def agg_dicts(self, acc, result):
         """
         :param acc: accumulator dictionary
@@ -224,6 +234,8 @@ class EventBasedCalculator(base.HazardCalculator):
                 self.datastore['gmf_data/time_by_rup'][rupids] = times
                 hdf5.extend(dset, df.sid.to_numpy())
                 hdf5.extend(self.datastore['gmf_data/eid'], df.eid.to_numpy())
+                with agg_mon:
+                    self.update_log_gmf(df, len(primary))
                 for m in range(len(primary)):
                     hdf5.extend(self.datastore[f'gmf_data/gmv_{m}'],
                                 df[f'gmv_{m}'])
@@ -370,32 +382,23 @@ class EventBasedCalculator(base.HazardCalculator):
         """
         size = self.datastore.getsize('gmf_data')
         logging.info(f'Stored {humansize(size)} of GMFs')
-        if size > 1024**3:
-            logging.warning(
-                'There are more than 1 GB of GMFs, not computing avg_gmf')
-            return numpy.unique(self.datastore['gmf_data/eid'][:])
-
-        rlzs = self.datastore['events']['rlz_id']
-        self.weights = self.datastore['weights'][:][rlzs]
-        gmf_df = self.datastore.read_df('gmf_data', 'sid')
-        for sec_imt in self.oqparam.get_sec_imts():  # ignore secondary perils
-            del gmf_df[sec_imt]
-        rel_events = gmf_df.eid.unique()
+        E = len(self.datastore['events'])
+        rel_events = numpy.unique(self.datastore['gmf_data/eid'][:])
         e = len(rel_events)
         if e == 0:
             raise RuntimeError(
                 'No GMFs were generated, perhaps they were '
                 'all below the minimum_intensity threshold')
-        elif e < len(self.datastore['events']):
+        elif e < E:
             self.datastore['relevant_events'] = rel_events
             logging.info('Stored {:_d} relevant event IDs'.format(e))
 
-        # really compute and store the avg_gmf
-        M = len(self.oqparam.min_iml)
-        avg_gmf = numpy.zeros((2, self.N, M), F32)
-        for sid, avgstd in compute_avg_gmf(
-                gmf_df, self.weights, self.oqparam.min_iml).items():
-            avg_gmf[:, sid] = avgstd
+        # compute and store avg_gmf
+        avg_gmf = numpy.zeros_like(self.log_gmf)
+        mean = self.log_gmf[0] / E
+        std = numpy.sqrt(self.log_gmf[1] / E - mean ** 2)
+        avg_gmf[0] = numpy.exp(mean)
+        avg_gmf[1] = numpy.exp(std)
         self.datastore['avg_gmf'] = avg_gmf
         return rel_events
 
