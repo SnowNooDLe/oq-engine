@@ -18,8 +18,29 @@
 import unittest
 import os
 
+from openquake.baselib.hdf5 import read_csv
 from openquake.hazardlib.tests.gsim.check_gsim import check_gsim
 
+
+def get_out_types(stdtypes):
+    out = ["MEAN"]
+    for stdtype in sorted(stdtypes):
+        upper = stdtype.upper().replace(' ', '_')
+        out.append(upper + '_STDDEV')
+    return out
+
+
+def verify(gsim, pathnames, ptol1, ptol2):
+    """
+    Verify the gsim by using the verification tables within the given
+    tolerances
+    """
+    out_types = get_out_types(gsim.DEFINED_FOR_STANDARD_DEVIATION_TYPES)
+    assert len(out_types) == len(pathnames)
+    for path in pathnames:
+        aw = read_csv(path, {'result_type': str, None: float})
+        import pdb; pdb.set_trace()
+    
 
 class BaseGSIMTestCase(unittest.TestCase):
     BASE_DATA_PATH = os.path.join(os.path.dirname(__file__), 'data')
@@ -33,3 +54,14 @@ class BaseGSIMTestCase(unittest.TestCase):
             raise AssertionError(stats)
         print()
         print(stats)
+
+    def check_all(self, filenames, ptol1, ptol2=None, **kwargs):
+        """
+        :param filenames: list of local file names for the verification tables
+        :param ptol1: tolerance (in percentage) for the mean
+        :param ptol2: tolerance (in percentage) for the mean
+        :param kwargs: parameters to pass to the GSIM_CLASS
+        """
+        gsim = self.GSIM_CLASS(**kwargs)
+        fnames = [os.path.join(self.BASE_DATA_PATH, f) for f in filenames]
+        verify(gsim, fnames, ptol1, ptol2 or ptol1)
