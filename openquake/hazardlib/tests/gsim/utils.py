@@ -17,8 +17,12 @@
 # along with OpenQuake.  If not, see <http://www.gnu.org/licenses/>.
 import unittest
 import os
+import numpy as np
+import pandas as pd
 
 from openquake.baselib.hdf5 import read_csv
+from openquake.hazardlib.imt import from_string
+from openquake.hazardlib.contexts import ContextMaker
 from openquake.hazardlib.tests.gsim.check_gsim import check_gsim
 
 
@@ -30,17 +34,57 @@ def get_out_types(stdtypes):
     return out
 
 
+def all_equals(inputs):
+    inp0 = inputs[0]
+    for inp in inputs[1:]:
+        diff = inp != inp0
+        if isinstance(diff, np.ndarray):
+            if diff.any():
+                return False
+        elif diff:
+            return False
+    return True
+
+
 def verify(gsim, pathnames, ptol1, ptol2):
     """
     Verify the gsim by using the verification tables within the given
     tolerances
     """
+    cmaker = ContextMaker(gsim.DEFINED_FOR_TECTONIC_REGION_TYPE, [gsim])
     out_types = get_out_types(gsim.DEFINED_FOR_STANDARD_DEVIATION_TYPES)
     assert len(out_types) == len(pathnames)
+    result = {}  # out_type -> mean or std
+    inputs = []
+    outfields = []
     for path in pathnames:
-        aw = read_csv(path, {'result_type': str, None: float})
-        import pdb; pdb.set_trace()
-    
+        df = pd.read_csv(path)
+        arr = df.to_numpy()
+        idx = list(df.columns).index('result_type')
+        [out_type] = df.result_type.unique()
+        result[out_type] = arr[:, idx + 2:]
+        inpfields = list(df.columns[:idx])
+        inputs.append(arr[:, :idx])
+        outfields.append(df.columns[idx + 2:].to_numpy())
+        # all fields except result_type, damping, i.e. the IMT fields
+    pnames = ' '.join(pathnames)
+    assert all_equals(inputs), 'Inconsistent inputs in %s' % pnames
+    assert all_equals(outfields), 'Inconsistent IMTs in %s' % pnames
+    imts = [from_string(f.strip().upper()) for f in outfields[0]]
+    C = len(inputs[0])
+    ctx = cmaker.ctx_builder.zeros(C).view(np.recarray)
+    for i, inpfield in enumerate(inpfields):
+        # ex. inpfields = ['rup_mag', 'rup_rake', 'dist_rjb', 'site_vs30']
+        prefix, suffix = inpfield.split('_')
+        setattr(ctx, suffix, inputs[0][:, i])
+    out = np.zeros((4, C))
+    gsim.compute(ctx, imts, *out)
+    idx = dict(
+        MEAN=0, TOTAL_STDDEV=1, INTER_EVENT_STDDEV=2, INTRA_EVENT_STDDEV=3)
+    for m, imt in enumerate(imts):
+        for result_type, res in result.items():
+            np.testing.assert_allclose(out[idx[result_type], m], res[:, m])
+
 
 class BaseGSIMTestCase(unittest.TestCase):
     BASE_DATA_PATH = os.path.join(os.path.dirname(__file__), 'data')
