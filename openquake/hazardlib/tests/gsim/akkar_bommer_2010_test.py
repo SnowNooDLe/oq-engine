@@ -28,16 +28,16 @@ class AkkarBommer2010TestCase(BaseGSIMTestCase):
 
     def test_mean(self):
         self.check('AKBO10/AK10_MEAN.csv',
-                    max_discrep_percentage=0.6)
+                   max_discrep_percentage=0.6)
 
     def test_std_intra(self):
         self.check('AKBO10/AK10_STD_INTRA.csv',
-                    max_discrep_percentage=0.1)
+                   max_discrep_percentage=0.1)
 
     def test_std_inter(self):
         self.check('AKBO10/AK10_STD_INTER.csv',
-                    max_discrep_percentage=0.1)
+                   max_discrep_percentage=0.1)
 
     def test_std_total(self):
         self.check('AKBO10/AK10_STD_TOTAL.csv',
-                    max_discrep_percentage=0.1)
+                   max_discrep_percentage=0.1)
