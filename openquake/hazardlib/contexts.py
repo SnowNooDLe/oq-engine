@@ -44,6 +44,7 @@ from openquake.hazardlib.calc.filters import MagDepDistance
 from openquake.hazardlib.probability_map import ProbabilityMap
 from openquake.hazardlib.geo.surface import PlanarSurface
 
+STD_TYPES = (StdDev.TOTAL, StdDev.INTER_EVENT, StdDev.INTRA_EVENT)
 KNOWN_DISTANCES = frozenset(
     'rrup rx ry0 rjb rhypo repi rcdpp azimuth azimuth_cp rvolc closest_point'
     .split())
@@ -146,7 +147,17 @@ def use_recarray(gsims):
 
 class ContextMaker(object):
     """
-    A class to manage the creation of contexts for distances, sites, rupture.
+    A class to manage the creation of contexts and to compute mean/stddevs
+    and possibly PoEs.
+
+    :param trt: a tectonic region type string
+    :param gsims: a list of GSIMs or a dictionary gsim -> rlz indices
+    :param param:
+       a dictionary of parameters like the maximum_distance, the IMTLs,
+       the investigation time, etc
+
+    NB: the trt can be different from the tectonic region type for which
+    the underlying GSIMs are defined. This is intentional.
     """
     REQUIRES = ['DISTANCES', 'SITES_PARAMETERS', 'RUPTURE_PARAMETERS']
     rup_indep = True
@@ -516,6 +527,9 @@ class ContextMaker(object):
                     stypes = (StdDev.TOTAL,)
                 else:
                     stypes = (StdDev.INTER_EVENT, StdDev.INTRA_EVENT)
+            elif stdtype == StdDev.ALL:
+                stypes = tuple(sdt for sdt in STD_TYPES if sdt in
+                               gsim.DEFINED_FOR_STANDARD_DEVIATION_TYPES)
             else:
                 stypes = (stdtype,)
             S = len(stypes)
@@ -556,22 +570,22 @@ class ContextMaker(object):
         :yields: poes of shape (N, L, G)
         """
         from openquake.hazardlib.site_amplification import get_poes_site
-        nsites = numpy.array([len(ctx.sids) for ctx in ctxs])
-        N = nsites.sum()
-        poes = numpy.zeros((N, self.loglevels.size, len(self.gsims)))
         with self.gmf_mon:
             mean_stdt = self.get_mean_stds(ctxs, StdDev.TOTAL)
-        with self.poe_mon:
-            for g, gsim in enumerate(self.gsims):
-                # builds poes of shape (N, L, G)
-                if self.af:  # kernel amplification method
-                    poes[:, :, g] = get_poes_site(mean_stdt[g], self, ctxs)
-                else:  # regular case
-                    poes[:, :, g] = gsim.get_poes(mean_stdt[g], self, ctxs)
         s = 0
-        for n in nsites:
-            yield poes[s:s+n]
-            s += n
+        with self.poe_mon:
+            for ctx in ctxs:
+                n = len(ctx)
+                poes = numpy.zeros((n, self.loglevels.size, len(self.gsims)))
+                for g, gsim in enumerate(self.gsims):
+                    ms = mean_stdt[g][:, :, s:s+n]
+                    # builds poes of shape (n, L, G)
+                    if self.af:  # kernel amplification method
+                        poes[:, :, g] = get_poes_site(ms, self, ctx)
+                    else:  # regular case
+                        poes[:, :, g] = gsim.get_poes(ms, self, ctx)
+                yield poes
+                s += n
 
 
 # see contexts_tests.py for examples of collapse
@@ -890,6 +904,17 @@ def full_context(sites, rup, dctx=None):
         for par, val in vars(dctx).items():
             setattr(self, par, val)
     return self
+
+
+def get_mean_stds(gsims, ctx, imts, stdtype=StdDev.ALL):
+    """
+    :returns:
+        an array of shape (G, O, M, N) obtained by applying the
+        given gsims, ctx amd imts
+    """
+    imtls = {imt.string: [0] for imt in imts}
+    cmaker = ContextMaker('*', gsims, {'imtls': imtls})
+    return numpy.array(cmaker.get_mean_stds([ctx], stdtype))
 
 
 # mock of a rupture used in the tests and in the SMTK

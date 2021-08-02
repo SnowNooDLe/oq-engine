@@ -444,12 +444,20 @@ class GMPE(GroundShakingIntensityModel):
 
     def compute(self, ctx, imts, mean, sig, tau, phi):
         """
-        To be overridden in subclasses.
+        :param ctx: a RuptureContext object or a numpy recarray of size N
+        :param imts: a list of M Intensity Measure Types
+        :param mean: an array of shape (M, N) for the means
+        :param sig: an array of shape (M, N) for the TOTAL stddevs
+        :param tau: an array of shape (M, N) for the INTER_EVENT stddevs
+        :param phi: an array of shape (M, N) for the INTRA_EVENT stddevs
+
+        To be overridden in subclasses with a procedure filling the
+        arrays and returning None.
         """
         raise NotImplementedError
 
     # the ctxs are used in avg_poe_gmpe
-    def get_poes(self, mean_std, cmaker, ctxs=()):
+    def get_poes(self, mean_std, cmaker, ctx):
         """
         Calculate and return probabilities of exceedance (PoEs) of one or more
         intensity measure levels (IMLs) of one intensity measure type (IMT)
@@ -484,7 +492,7 @@ class GMPE(GroundShakingIntensityModel):
             for s in signs:
                 ms = numpy.array(mean_std)  # make a copy
                 for m in range(len(loglevels)):
-                    ms[0, m] += s * self.adjustment
+                    ms[0, m] += s * ctx.adjustment
                 outs.append(_get_poes(ms, loglevels, trunclevel))
             arr[:] = numpy.average(outs, weights=weights, axis=0)
         elif hasattr(self, "mixture_model"):
