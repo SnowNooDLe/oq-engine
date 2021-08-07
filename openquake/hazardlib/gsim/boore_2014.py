@@ -181,18 +181,18 @@ _get_path_scaling = CallableDict()
 
 
 @_get_path_scaling.add("base")
-def _get_path_scaling_1(kind, region, C, ctx, mag):
+def _get_path_scaling_1(kind, region, C, ctx):
     """
     Returns the path scaling term given by equation (3)
     """
     rval = np.sqrt((ctx.rjb ** 2.0) + (C["h"] ** 2.0))
-    scaling = (C["c1"] + C["c2"] * (mag - CONSTS["Mref"])) *\
-        np.log(rval / CONSTS["Rref"])
+    scaling = (C["c1"] + C["c2"] * (ctx.mag - CONSTS["Mref"])) * np.log(
+        rval / CONSTS["Rref"])
     return scaling + ((C["c3"] + C["Dc3"]) * (rval - CONSTS["Rref"]))
 
 
 @_get_path_scaling.add("stewart")
-def _get_path_scaling_2(kind, region, C, ctx, mag):
+def _get_path_scaling_2(kind, region, C, ctx):
     """
     Returns the path scaling term defined in Equation 3
     """
@@ -208,7 +208,7 @@ def _get_path_scaling_2(kind, region, C, ctx, mag):
         raise ValueError("region=%s" % region)
 
     # Calculate geometric spreading component of path scaling term
-    fp_geom = ((C["c1"] + C["c2"] * (mag - CONSTS["Mref"])) *
+    fp_geom = ((C["c1"] + C["c2"] * (ctx.mag - CONSTS["Mref"])) *
                np.log(rval / CONSTS["Rref"]))
     # Calculate anelastic attenuation component of path scaling term, with
     # delta c3 accounting for regional effects
@@ -225,7 +225,7 @@ def _get_pga_on_rock(kind, region, sof, C, ctx):
                   _get_path_scaling(kind, region, C, ctx, ctx.mag))
 
 
-def _get_site_scaling(kind, region, C, pga_rock, ctx, period, rjb):
+def _get_site_scaling(kind, region, C, pga_rock, ctx, period):
     """
     Returns the site-scaling term (equation 5), broken down into a
     linear scaling, a nonlinear scaling and a basin scaling term
@@ -322,9 +322,9 @@ class BooreEtAl2014(GMPE):
             C = self.COEFFS[imt]
             mean[m] = (
                 _get_magnitude_scaling_term(self.sof, C, ctx) +
-                _get_path_scaling(self.kind, self.region, C, ctx, ctx.mag) +
+                _get_path_scaling(self.kind, self.region, C, ctx) +
                 _get_site_scaling(self.kind, self.region,
-                                  C, pga_rock, ctx, imt.period, ctx.rjb))
+                                  C, pga_rock, ctx, imt.period))
             sig[m], tau[m], phi[m] = _get_stddevs(self.kind, C, ctx)
 
     COEFFS = CoeffsTable(sa_damping=5, table="""\
