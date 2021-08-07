@@ -46,6 +46,7 @@ Module exports :class:`BooreEtAl2014`,
 import numpy as np
 
 from openquake.baselib.general import CallableDict
+from openquake.baselib.performance import vectorize_arg
 from openquake.hazardlib.gsim.base import GMPE, CoeffsTable, add_alias
 from openquake.hazardlib import const
 from openquake.hazardlib.imt import PGA, PGV, SA
@@ -78,6 +79,7 @@ def _get_basin_depth_term(region, C, ctx, period):
     return f_dz1
 
 
+@vectorize_arg(1)
 def _get_inter_event_tau(C, mag):
     """
     Returns the inter-event standard deviation (tau), which is dependent
@@ -96,6 +98,7 @@ _get_intra_event_phi = CallableDict()
 
 
 @_get_intra_event_phi.add("base")
+@vectorize_arg(2)
 def _get_intra_event_phi_1(kind, C, mag, rjb, vs30):
     """
     Returns the intra-event standard deviation (phi), dependent on
@@ -127,6 +130,7 @@ def _get_intra_event_phi_1(kind, C, mag, rjb, vs30):
 
 
 @_get_intra_event_phi.add("stewart")
+@vectorize_arg(2)
 def _get_intra_event_phi_2(kind, C, mag, rjb, vs30):
     """
     Returns the intra-event standard deviation (phi)
@@ -151,16 +155,17 @@ def _get_linear_site_term(C, vs30):
     return C["c"] * np.log(flin)
 
 
-def _get_magnitude_scaling_term(sof, C, ctx):
+@vectorize_arg(2)
+def _get_magnitude_scaling_term(sof, C, mag, rake):
     """
     Returns the magnitude scling term defined in equation (2)
     """
-    dmag = ctx.mag - C["Mh"]
-    if ctx.mag <= C["Mh"]:
-        mag_term = (C["e4"] * dmag) + (C["e5"] * (dmag ** 2.0))
+    dmag = mag - C["Mh"]
+    if mag <= C["Mh"]:
+        mag_term = (C["e4"] * dmag) + C["e5"] * dmag ** 2
     else:
         mag_term = C["e6"] * dmag
-    return _get_style_of_faulting_term(sof, C, ctx) + mag_term
+    return _get_style_of_faulting_term(sof, C, rake) + mag_term
 
 
 def _get_nonlinear_site_term(C, vs30, pga_rock):
@@ -221,7 +226,8 @@ def _get_pga_on_rock(kind, region, sof, C, ctx):
     Returns the median PGA on rock, which is a sum of the
     magnitude and distance scaling
     """
-    return np.exp(_get_magnitude_scaling_term(sof, C, ctx) +
+    rake = ctx.rake if sof else None
+    return np.exp(_get_magnitude_scaling_term(sof, C, ctx.mag, rake) +
                   _get_path_scaling(kind, region, C, ctx))
 
 
@@ -249,7 +255,8 @@ def _get_stddevs(kind, C, ctx):
     return [np.sqrt(tau**2 + phi**2), tau, phi]
 
 
-def _get_style_of_faulting_term(sof, C, ctx):
+@vectorize_arg(2)
+def _get_style_of_faulting_term(sof, C, rake):
     """
     Get fault type dummy variables
     Fault type (Strike-slip, Normal, Thrust/reverse) is
@@ -262,10 +269,10 @@ def _get_style_of_faulting_term(sof, C, ctx):
     """
     if not sof:
         return C["e0"]  # Unspecified style-of-faulting
-    elif np.abs(ctx.rake) <= 30.0 or (180.0 - np.abs(ctx.rake)) <= 30.0:
+    elif np.abs(rake) <= 30.0 or (180.0 - np.abs(rake)) <= 30.0:
         # strike-slip
         return C["e1"]
-    elif ctx.rake > 30.0 and ctx.rake < 150.0:
+    elif rake > 30.0 and rake < 150.0:
         # reverse
         return C["e3"]
     else:
@@ -318,10 +325,11 @@ class BooreEtAl2014(GMPE):
         C_PGA = self.COEFFS[PGA()]
         pga_rock = _get_pga_on_rock(
             self.kind, self.region, self.sof, C_PGA, ctx)
+        rake = ctx.rake if self.sof else None
         for m, imt in enumerate(imts):
             C = self.COEFFS[imt]
             mean[m] = (
-                _get_magnitude_scaling_term(self.sof, C, ctx) +
+                _get_magnitude_scaling_term(self.sof, C, ctx.mag, rake) +
                 _get_path_scaling(self.kind, self.region, C, ctx) +
                 _get_site_scaling(self.kind, self.region,
                                   C, pga_rock, ctx, imt.period))
