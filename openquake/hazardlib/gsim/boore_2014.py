@@ -185,7 +185,7 @@ def _get_path_scaling_1(kind, region, C, ctx):
     """
     Returns the path scaling term given by equation (3)
     """
-    rval = np.sqrt((ctx.rjb ** 2.0) + (C["h"] ** 2.0))
+    rval = np.sqrt(ctx.rjb ** 2 + C["h"] ** 2)
     scaling = (C["c1"] + C["c2"] * (ctx.mag - CONSTS["Mref"])) * np.log(
         rval / CONSTS["Rref"])
     return scaling + ((C["c3"] + C["Dc3"]) * (rval - CONSTS["Rref"]))
@@ -197,7 +197,7 @@ def _get_path_scaling_2(kind, region, C, ctx):
     Returns the path scaling term defined in Equation 3
     """
     # Calculate R in Equation 4
-    rval = np.sqrt((ctx.rjb ** 2.0) + (C["h"] ** 2.0))
+    rval = np.sqrt(ctx.rjb ** 2 + C["h"] ** 2)
     if region == "CAL":
         delta_c3 = 0
     elif region == "CHN":
@@ -222,7 +222,7 @@ def _get_pga_on_rock(kind, region, sof, C, ctx):
     magnitude and distance scaling
     """
     return np.exp(_get_magnitude_scaling_term(sof, C, ctx) +
-                  _get_path_scaling(kind, region, C, ctx, ctx.mag))
+                  _get_path_scaling(kind, region, C, ctx))
 
 
 def _get_site_scaling(kind, region, C, pga_rock, ctx, period):
