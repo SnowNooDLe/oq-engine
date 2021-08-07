@@ -19,7 +19,7 @@ import time
 import unittest
 import pickle
 import numpy
-from openquake.baselib.performance import Monitor
+from openquake.baselib.performance import Monitor, vectorize_arg
 
 
 class MonitorTestCase(unittest.TestCase):
@@ -60,3 +60,18 @@ class MonitorTestCase(unittest.TestCase):
 
     def test_pickleable(self):
         pickle.loads(pickle.dumps(self.mon))
+
+
+def dummy(mag, rake):
+    return mag * numpy.sin(rake)
+
+
+class VectorizeTestCase(unittest.TestCase):
+    def test1(self):
+        mag = numpy.array([5., 5., 5., 5.])
+        rake = [.2, .2, .3, .3]
+        res = dummy(mag, rake)
+        res0 = vectorize_arg(0)(dummy)(mag, rake)
+        res1 = vectorize_arg(1)(dummy)(mag, rake)
+        numpy.testing.assert_allclose(res, res0)
+        numpy.testing.assert_allclose(res, res1)

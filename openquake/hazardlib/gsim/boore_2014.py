@@ -111,13 +111,15 @@ def _get_intra_event_phi_1(kind, C, mag, rjb, vs30):
     elif mag >= 5.5:
         base_vals += C["f2"]
     else:
-        base_vals += (C["f1"] + (C["f2"] - C["f1"]) * (mag - 4.5))
+        base_vals += C["f1"] + (C["f2"] - C["f1"]) * (mag - 4.5)
+
     # Distance dependent phi (Equation 16)
     idx1 = rjb > C["R2"]
     base_vals[idx1] += C["DfR"]
     idx2 = np.logical_and(rjb > C["R1"], rjb <= C["R2"])
     base_vals[idx2] += (C["DfR"] * (np.log(rjb[idx2] / C["R1"]) /
                                     np.log(C["R2"] / C["R1"])))
+
     # Site-dependent phi (Equation 15)
     idx1 = vs30 <= CONSTS["v1"]
     base_vals[idx1] -= C["DfV"]
