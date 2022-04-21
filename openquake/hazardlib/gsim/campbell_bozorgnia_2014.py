@@ -347,14 +347,14 @@ class CampbellBozorgnia2014(GMPE):
     REQUIRES_SITES_PARAMETERS = {'vs30', 'z2pt5'}
 
     #: Required rupture parameters are magnitude, rake, dip, rupture
-    #: width and hypocentral depth
+    #: and hypocentral depth
     REQUIRES_RUPTURE_PARAMETERS = {
-        'mag', 'rake', 'dip', 'width', 'hypo_depth'}
+        'mag', 'rake', 'dip', 'hypo_depth'}
 
     #: Required distance measures are Rrup, Rjb and Rx
     REQUIRES_DISTANCES = {'rrup', 'rjb', 'rx'}
 
-    REQUIRES_COMPUTED_PARAMETERS = {'ztor'}
+    REQUIRES_COMPUTED_PARAMETERS = {'ztor', 'width'}
 
     SJ = 0  # 1 for Japan
 
@@ -364,6 +364,7 @@ class CampbellBozorgnia2014(GMPE):
         """
         frv = np.zeros_like(rup.rake)
         frv[(rup.rake > 30.) & (rup.rake < 150.)] = 1.
+        # breakpoint()
         # if Ztor is unknown
         if not hasattr(rup, "ztor"):
             # Equation 4 and 5 in Chiou & Youngs 2014
@@ -372,6 +373,27 @@ class CampbellBozorgnia2014(GMPE):
                 np.maximum(2.704 - 1.226 * np.maximum(rup.mag - 5.849, 0), 0) ** 2,
                 np.maximum(2.673 - 1.136 * np.maximum(rup.mag - 4.970, 0), 0) ** 2
             )
+        # if width is unknown
+        # breakpoint()
+        if not hasattr(rup, "width"):
+            # check whether zbot is provided
+            if not hasattr(rup, 'zbot'):
+                raise KeyError('Zbot is required if width is unknown.')
+
+            rup.ztor = np.where(
+                frv,
+                np.maximum(2.704 - 1.226 * np.maximum(rup.mag - 5.849, 0), 0) ** 2,
+                np.maximum(2.673 - 1.136 * np.maximum(rup.mag - 4.970, 0), 0) ** 2
+            )
+
+            try:
+                rup.width = np.minimum(
+                    np.sqrt(10**((rup.mag - 4.07)/0.98)),
+                    (rup.zbot - rup.ztor) / np.sin(np.radians(rup.dip))
+                )
+            except ZeroDivisionError:
+                rup.width = np.sqrt(10**((rup.mag - 4.07)/0.98))
+            rup.hypo_depth = 9.0
 
     def compute(self, ctx: np.recarray, imts, mean, sig, tau, phi):
         """
@@ -381,6 +403,7 @@ class CampbellBozorgnia2014(GMPE):
         """
         C_PGA = self.COEFFS[PGA()]
         # Get mean and standard deviation of PGA on rock (Vs30 1100 m/s^2)
+        breakpoint()
         pga1100 = np.exp(get_mean_values(self.SJ, C_PGA, ctx))
         for m, imt in enumerate(imts):
             C = self.COEFFS[imt]
