@@ -346,15 +346,52 @@ class CampbellBozorgnia2014(GMPE):
     #: and depth (km) to the 2.5 km/s shear wave velocity layer (z2pt5)
     REQUIRES_SITES_PARAMETERS = {'vs30', 'z2pt5'}
 
-    #: Required rupture parameters are magnitude, rake, dip, ztor, rupture
-    #: width and hypocentral depth
+    #: Required rupture parameters are magnitude, rake, dip, ztor
+    #: and rupture width
     REQUIRES_RUPTURE_PARAMETERS = {
-        'mag', 'rake', 'dip', 'ztor', 'width', 'hypo_depth'}
+        'mag', 'rake', 'dip', 'ztor', 'width'}
 
     #: Required distance measures are Rrup, Rjb and Rx
     REQUIRES_DISTANCES = {'rrup', 'rjb', 'rx'}
 
+    REQUIRES_COMPUTED_PARAMETERS = {'hypo_depth'}
+
     SJ = 0  # 1 for Japan
+
+    def set_parameters(self, rup):
+        """
+        Estimate the rupture parameters if not provided.
+        """
+        frv = np.zeros_like(rup.rake)
+        frv[(rup.rake > 30.) & (rup.rake < 150.)] = 1.
+
+        if not hasattr(rup, "hypo_depth"):
+            # Equation 36 in Campbell & Bozorgnia (2014)
+            fdz_m = -4.317 + 0.984 * rup.mag \
+                if rup.mag < 6.75 \
+                else np.full_like(rup.mag, 2.325, dtype=np.double)
+
+            # Equation 37 in Campbell & Bozorgnia (2014)
+            fdz_d = 0.0445 * (rup.dip - 40) \
+                if rup.dig <= 40 \
+                else np.zeros_like(rup.dip)
+
+            ztori = np.where(
+                frv,
+                np.maximum(2.704 - 1.226 * np.maximum(rup.mag - 5.849, 0), 0) ** 2,
+                np.maximum(2.673 - 1.136 * np.maximum(rup.mag - 4.970, 0), 0) ** 2
+            )
+
+            # The depth to the bottom of the rupture plane
+            zbor = ztori + rup.width * np.sin(np.radians(rup.dip))
+            try:
+                # Equation 35 in Campbell & Bozorgnia (2014)
+                dz = np.exp(np.minimum(fdz_m + fdz_d, np.log(0.9 * (zbor - ztori))))
+            except ValueError:
+                # zbor == ztori
+                dz = 0
+
+            rup.hypo_depth = dz + ztori
 
     def compute(self, ctx: np.recarray, imts, mean, sig, tau, phi):
         """
