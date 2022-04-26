@@ -346,15 +346,15 @@ class CampbellBozorgnia2014(GMPE):
     #: and depth (km) to the 2.5 km/s shear wave velocity layer (z2pt5)
     REQUIRES_SITES_PARAMETERS = {'vs30', 'z2pt5'}
 
-    #: Required rupture parameters are magnitude, rake, dip, ztor
+    #: Required rupture parameters are magnitude, rake, dip
     #: and rupture width
     REQUIRES_RUPTURE_PARAMETERS = {
-        'mag', 'rake', 'dip', 'ztor', 'width'}
+        'mag', 'rake', 'dip', 'width'}
 
     #: Required distance measures are Rrup, Rjb and Rx
     REQUIRES_DISTANCES = {'rrup', 'rjb', 'rx'}
 
-    REQUIRES_COMPUTED_PARAMETERS = {'hypo_depth'}
+    REQUIRES_COMPUTED_PARAMETERS = {'ztor', 'hypo_depth'}
 
     SJ = 0  # 1 for Japan
 
@@ -364,6 +364,14 @@ class CampbellBozorgnia2014(GMPE):
         """
         frv = np.zeros_like(rup.rake)
         frv[(rup.rake > 30.) & (rup.rake < 150.)] = 1.
+
+        if not hasattr(rup, "ztor"):
+            # Equation 4 and 5 in Chiou & Youngs 2014
+            rup.ztor = np.where(
+                frv,
+                np.maximum(2.704 - 1.226 * np.maximum(rup.mag - 5.849, 0), 0) ** 2,
+                np.maximum(2.673 - 1.136 * np.maximum(rup.mag - 4.970, 0), 0) ** 2
+            )
 
         if not hasattr(rup, "hypo_depth"):
             # Equation 36 in Campbell & Bozorgnia (2014)
