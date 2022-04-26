@@ -145,10 +145,10 @@ def _get_hanging_wall_coeffs_rx(C, ctx):
     r_1 = ctx.width * cos(radians(ctx.dip))
     r_2 = 62.0 * ctx.mag - 350.0
     fhngrx = np.zeros(len(r_x))
-    # Case when 0 <= Rx <= R1
+    # Case when 0 <= Rx < R1
     idx = np.logical_and(r_x >= 0., r_x < r_1)
     fhngrx[idx] = _get_f1rx(C, r_x[idx], r_1[idx])
-    # Case when Rx > R1
+    # Case when Rx >= R1
     idx = r_x >= r_1
     f2rx = _get_f2rx(C, r_x[idx], r_1[idx], r_2[idx])
     f2rx[f2rx < 0.0] = 0.0
@@ -371,14 +371,13 @@ class CampbellBozorgnia2014(GMPE):
                 np.maximum(2.704 - 1.226 * np.maximum(rup.mag - 5.849, 0), 0) ** 2,
                 np.maximum(2.673 - 1.136 * np.maximum(rup.mag - 4.970, 0), 0) ** 2
             )
-        # if width is unknown
-        # breakpoint()
+
         if not hasattr(rup, "width"):
             # check whether zbot is provided
             if not hasattr(rup, 'zbot'):
                 raise KeyError('Zbot is required if width is unknown.')
 
-            rup.ztor = np.where(
+            ztori = np.where(
                 frv,
                 np.maximum(2.704 - 1.226 * np.maximum(rup.mag - 5.849, 0), 0) ** 2,
                 np.maximum(2.673 - 1.136 * np.maximum(rup.mag - 4.970, 0), 0) ** 2
@@ -387,7 +386,7 @@ class CampbellBozorgnia2014(GMPE):
             try:
                 rup.width = np.minimum(
                     np.sqrt(10**((rup.mag - 4.07)/0.98)),
-                    (rup.zbot - rup.ztor) / np.sin(np.radians(rup.dip))
+                    (rup.zbot - ztori) / np.sin(np.radians(rup.dip))
                 )
             except ZeroDivisionError:
                 rup.width = np.sqrt(10**((rup.mag - 4.07)/0.98))
@@ -401,7 +400,6 @@ class CampbellBozorgnia2014(GMPE):
         """
         C_PGA = self.COEFFS[PGA()]
         # Get mean and standard deviation of PGA on rock (Vs30 1100 m/s^2)
-        breakpoint()
         pga1100 = np.exp(get_mean_values(self.SJ, C_PGA, ctx))
         for m, imt in enumerate(imts):
             C = self.COEFFS[imt]
