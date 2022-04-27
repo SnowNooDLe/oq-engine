@@ -352,6 +352,8 @@ class CampbellBozorgnia2014(GMPE):
     #: Required distance measures are Rrup, Rjb and Rx
     REQUIRES_DISTANCES = {'rrup', 'rjb', 'rx'}
 
+    #: Required computed parameters are ztor, rupture width
+    #: and hypocentral depth
     REQUIRES_COMPUTED_PARAMETERS = {'ztor', 'width', 'hypo_depth'}
 
     SJ = 0  # 1 for Japan
@@ -371,11 +373,12 @@ class CampbellBozorgnia2014(GMPE):
             )
 
         if not hasattr(rup, "width"):
-            # check whether zbot is provided
+            # width estimation requires zbot
             if not hasattr(rup, 'zbot'):
                 raise KeyError('Zbot is required if width is unknown.')
 
             try:
+                # Equation 39 in Campbell & Bozorgnia 2014
                 rup.width = np.minimum(
                     np.sqrt(10**((rup.mag - 4.07)/0.98)),
                     (rup.zbot - rup.ztor) / np.sin(np.radians(rup.dip))
