@@ -145,10 +145,10 @@ def _get_hanging_wall_coeffs_rx(C, ctx):
     r_1 = ctx.width * cos(radians(ctx.dip))
     r_2 = 62.0 * ctx.mag - 350.0
     fhngrx = np.zeros(len(r_x))
-    # Case when 0 <= Rx <= R1
+    # Case when 0 <= Rx < R1
     idx = np.logical_and(r_x >= 0., r_x < r_1)
     fhngrx[idx] = _get_f1rx(C, r_x[idx], r_1[idx])
-    # Case when Rx > R1
+    # Case when Rx >= R1
     idx = r_x >= r_1
     f2rx = _get_f2rx(C, r_x[idx], r_1[idx], r_2[idx])
     f2rx[f2rx < 0.0] = 0.0
@@ -346,14 +346,13 @@ class CampbellBozorgnia2014(GMPE):
     #: and depth (km) to the 2.5 km/s shear wave velocity layer (z2pt5)
     REQUIRES_SITES_PARAMETERS = {'vs30', 'z2pt5'}
 
-    #: Required rupture parameters are magnitude, rake, dip
-    #: and rupture width
-    REQUIRES_RUPTURE_PARAMETERS = {'mag', 'rake', 'dip', 'width'}
+    #: Required rupture parameters are magnitude, rake and dip
+    REQUIRES_RUPTURE_PARAMETERS = {'mag', 'rake', 'dip'}
 
     #: Required distance measures are Rrup, Rjb and Rx
     REQUIRES_DISTANCES = {'rrup', 'rjb', 'rx'}
 
-    REQUIRES_COMPUTED_PARAMETERS = {'ztor', 'hypo_depth'}
+    REQUIRES_COMPUTED_PARAMETERS = {'ztor', 'width', 'hypo_depth'}
 
     SJ = 0  # 1 for Japan
 
@@ -363,7 +362,6 @@ class CampbellBozorgnia2014(GMPE):
         """
         frv = np.zeros_like(rup.rake)
         frv[(rup.rake > 30.) & (rup.rake < 150.)] = 1.
-
         if not hasattr(rup, "ztor"):
             # Equation 4 and 5 in Chiou & Youngs 2014
             rup.ztor = np.where(
@@ -371,6 +369,20 @@ class CampbellBozorgnia2014(GMPE):
                 np.maximum(2.704 - 1.226 * np.maximum(rup.mag - 5.849, 0), 0) ** 2,
                 np.maximum(2.673 - 1.136 * np.maximum(rup.mag - 4.970, 0), 0) ** 2
             )
+
+        if not hasattr(rup, "width"):
+            # check whether zbot is provided
+            if not hasattr(rup, 'zbot'):
+                raise KeyError('Zbot is required if width is unknown.')
+
+            try:
+                rup.width = np.minimum(
+                    np.sqrt(10**((rup.mag - 4.07)/0.98)),
+                    (rup.zbot - rup.ztor) / np.sin(np.radians(rup.dip))
+                )
+            except ZeroDivisionError:
+                rup.width = np.sqrt(10**((rup.mag - 4.07)/0.98))
+            rup.hypo_depth = 9.0
 
         if not hasattr(rup, "hypo_depth"):
             # Equation 36 in Campbell & Bozorgnia 2014
@@ -400,6 +412,7 @@ class CampbellBozorgnia2014(GMPE):
                     dz = 0
 
             rup.hypo_depth = dz + rup.ztor
+
 
     def compute(self, ctx: np.recarray, imts, mean, sig, tau, phi):
         """
