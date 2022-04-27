@@ -377,16 +377,10 @@ class CampbellBozorgnia2014(GMPE):
             if not hasattr(rup, 'zbot'):
                 raise KeyError('Zbot is required if width is unknown.')
 
-            ztori = np.where(
-                frv,
-                np.maximum(2.704 - 1.226 * np.maximum(rup.mag - 5.849, 0), 0) ** 2,
-                np.maximum(2.673 - 1.136 * np.maximum(rup.mag - 4.970, 0), 0) ** 2
-            )
-
             try:
                 rup.width = np.minimum(
                     np.sqrt(10**((rup.mag - 4.07)/0.98)),
-                    (rup.zbot - ztori) / np.sin(np.radians(rup.dip))
+                    (rup.zbot - rup.ztor) / np.sin(np.radians(rup.dip))
                 )
             except ZeroDivisionError:
                 rup.width = np.sqrt(10**((rup.mag - 4.07)/0.98))
