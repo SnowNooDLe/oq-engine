@@ -348,8 +348,7 @@ class CampbellBozorgnia2014(GMPE):
 
     #: Required rupture parameters are magnitude, rake, dip
     #: and rupture width
-    REQUIRES_RUPTURE_PARAMETERS = {
-        'mag', 'rake', 'dip', 'width'}
+    REQUIRES_RUPTURE_PARAMETERS = {'mag', 'rake', 'dip', 'width'}
 
     #: Required distance measures are Rrup, Rjb and Rx
     REQUIRES_DISTANCES = {'rrup', 'rjb', 'rx'}
@@ -374,32 +373,33 @@ class CampbellBozorgnia2014(GMPE):
             )
 
         if not hasattr(rup, "hypo_depth"):
-            # Equation 36 in Campbell & Bozorgnia (2014)
-            fdz_m = -4.317 + 0.984 * rup.mag \
-                if rup.mag < 6.75 \
-                else np.full_like(rup.mag, 2.325, dtype=np.double)
+            # Equation 36 in Campbell & Bozorgnia 2014
+            fdz_m = np.where(
+                rup.mag < 6.75,
+                -4.317 + 0.984 * rup.mag,
+                2.325
+            )
 
-            # Equation 37 in Campbell & Bozorgnia (2014)
-            fdz_d = 0.0445 * (rup.dip - 40) \
-                if rup.dig <= 40 \
-                else np.zeros_like(rup.dip)
-
-            ztori = np.where(
-                frv,
-                np.maximum(2.704 - 1.226 * np.maximum(rup.mag - 5.849, 0), 0) ** 2,
-                np.maximum(2.673 - 1.136 * np.maximum(rup.mag - 4.970, 0), 0) ** 2
+            # Equation 37 in Campbell & Bozorgnia 2014
+            fdz_d = np.where(
+                rup.dip <= 40,
+                0.0445 * (rup.dip - 40),
+                0
             )
 
             # The depth to the bottom of the rupture plane
-            zbor = ztori + rup.width * np.sin(np.radians(rup.dip))
-            try:
-                # Equation 35 in Campbell & Bozorgnia (2014)
-                dz = np.exp(np.minimum(fdz_m + fdz_d, np.log(0.9 * (zbor - ztori))))
-            except ValueError:
-                # zbor == ztori
-                dz = 0
+            zbor = rup.ztor + rup.width * np.sin(np.radians(rup.dip))
 
-            rup.hypo_depth = dz + ztori
+            # To raise an error with numpy's RuntimeWarning
+            with np.errstate(divide="raise"):
+                try:
+                    # Equation 35 in Campbell & Bozorgnia (2014)
+                    dz = np.exp(np.minimum(fdz_m + fdz_d, np.log(0.9 * (zbor - rup.ztor))))
+                except ValueError:
+                    # zbor == rup.ztor
+                    dz = 0
+
+            rup.hypo_depth = dz + rup.ztor
 
     def compute(self, ctx: np.recarray, imts, mean, sig, tau, phi):
         """
