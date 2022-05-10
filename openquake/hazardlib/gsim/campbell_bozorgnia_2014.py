@@ -364,6 +364,7 @@ class CampbellBozorgnia2014(GMPE):
         """
         frv = np.zeros_like(rup.rake)
         frv[(rup.rake > 30.) & (rup.rake < 150.)] = 1.
+
         if not hasattr(rup, "ztor"):
             # Equation 4 and 5 in Chiou & Youngs 2014
             rup.ztor = np.where(
@@ -374,18 +375,18 @@ class CampbellBozorgnia2014(GMPE):
 
         if not hasattr(rup, "width"):
             # width estimation requires zbot
+            # where Zbot is the depth to the bottom of the seismogenic crust
             if not hasattr(rup, 'zbot'):
                 raise KeyError('Zbot is required if width is unknown.')
 
             try:
                 # Equation 39 in Campbell & Bozorgnia 2014
                 rup.width = np.minimum(
-                    np.sqrt(10**((rup.mag - 4.07)/0.98)),
+                    np.sqrt(10 ** ((rup.mag - 4.07) / 0.98)),
                     (rup.zbot - rup.ztor) / np.sin(np.radians(rup.dip))
                 )
             except ZeroDivisionError:
-                rup.width = np.sqrt(10**((rup.mag - 4.07)/0.98))
-            rup.hypo_depth = 9.0
+                rup.width = np.sqrt(10 ** ((rup.mag - 4.07) / 0.98))
 
         if not hasattr(rup, "hypo_depth"):
             # Equation 36 in Campbell & Bozorgnia 2014
@@ -411,7 +412,7 @@ class CampbellBozorgnia2014(GMPE):
                     # Equation 35 in Campbell & Bozorgnia (2014)
                     dz = np.exp(np.minimum(fdz_m + fdz_d, np.log(0.9 * (zbor - rup.ztor))))
                 except ValueError:
-                    # zbor == rup.ztor
+                    # when zbor == rup.ztor
                     dz = 0
 
             rup.hypo_depth = dz + rup.ztor
@@ -429,6 +430,7 @@ class CampbellBozorgnia2014(GMPE):
         for m, imt in enumerate(imts):
             C = self.COEFFS[imt]
             # Get mean and standard deviations for IMT
+            # breakpoint()
             mean[m] = get_mean_values(self.SJ, C, ctx, pga1100)
             if imt.string[:2] == "SA" and imt.period < 0.25:
                 # According to Campbell & Bozorgnia (2013) [NGA West 2 Report]
