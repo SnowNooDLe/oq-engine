@@ -553,27 +553,25 @@ class ClassicalCalculator(base.HazardCalculator):
         except KeyError:  # no data
             pass
         else:
-            slow_tasks = len(dur[dur > 3 * dur.mean()]) and dur.max() > 120
+            slow_tasks = len(dur[dur > 3 * dur.mean()]) and dur.max() > 180
             msg = 'There were %d slow task(s)' % slow_tasks
             if (slow_tasks and self.SLOW_TASK_ERROR and
                     not self.oqparam.disagg_by_src):
                 raise RuntimeError('%s in #%d' % (msg, self.datastore.calc_id))
             elif slow_tasks:
                 logging.info(msg)
-        nr = {name: len(dset['mag']) for name, dset in self.datastore.items()
-              if name.startswith('rup_')}
-        if nr:  # few sites, log the number of ruptures per magnitude
-            logging.info('%s', nr)
-        if '_poes' in self.datastore:
-            self.post_classical()
 
         # sanity check on the rupture IDs
         if 'rup' in self.datastore:
             rup_id = self.datastore['rup/id']
             tot = len(rup_id)
+            logging.info('Stored {:_d} ruptures'.format(tot))
             if 0 < tot < 1_000_000:
                 uniq = len(numpy.unique(rup_id[:]))
                 assert tot == uniq, (tot, uniq)
+
+        if '_poes' in self.datastore:
+            self.post_classical()
 
     def _create_hcurves_maps(self):
         oq = self.oqparam
