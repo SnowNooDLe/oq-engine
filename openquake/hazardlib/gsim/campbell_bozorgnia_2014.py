@@ -349,7 +349,7 @@ class CampbellBozorgnia2014(GMPE):
     #: Required rupture parameters are magnitude, rake, dip, ztor, rupture
     #: width and hypocentral depth
     REQUIRES_RUPTURE_PARAMETERS = {
-        'mag', 'rake', 'dip', 'ztor', 'width', 'hypo_depth'}
+        'mag', 'rake', 'dip', 'ztor', 'hypo_depth'}
 
     #: Required distance measures are Rrup, Rjb and Rx
     REQUIRES_DISTANCES = {'rrup', 'rjb', 'rx'}
@@ -366,6 +366,10 @@ class CampbellBozorgnia2014(GMPE):
             # To estimate a width, the GMPE needs Zbot
             self.REQUIRES_RUPTURE_PARAMETERS = \
                 self.REQUIRES_RUPTURE_PARAMETERS.union({"zbot", })
+        else:
+            # Not estimating a width, hence the GMPE needs width
+            self.REQUIRES_RUPTURE_PARAMETERS = \
+                self.REQUIRES_RUPTURE_PARAMETERS.union({"width", })
 
     def set_parameters(self, ctx):
         """
